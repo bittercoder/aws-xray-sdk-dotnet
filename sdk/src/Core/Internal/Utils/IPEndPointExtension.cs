@@ -91,5 +91,68 @@ namespace Amazon.XRay.Recorder.Core.Internal.Utils
                 return false;
             }
         }
+        
+        public static bool TryParse(string endpoint, out IPEndPoint endPoint)
+		{
+			if (string.IsNullOrEmpty(endpoint) || endpoint.Trim().Length == 0) {
+				_logger.InfoFormat("Failed to parse IPEndPoint because input is invalid. ({0})", endpoint);
+			}
+
+			if (defaultport != -1 && (defaultport < IPEndPoint.MinPort || defaultport > IPEndPoint.MaxPort)) {
+				throw new ArgumentException(string.Format("Invalid default port '{0}'", defaultport));
+			}
+
+			var values = endpoint.Split(new[] {':'});
+			IPAddress ipaddy;
+			int port = -1;
+
+			//check if we have an IPv6 or ports
+			if (values.Length <= 2) { // ipv4 or hostname
+				port = values.Length == 1 ? defaultport : GetPort(values[1]);
+				//try to use the address as IPv4, otherwise get hostname
+				if (!IPAddress.TryParse(values[0], out ipaddy)) {
+					ipaddy = GetIPfromHost(values[0]);
+				}
+			} else if (values.Length > 2) { //ipv6			
+				//could [a:b:c]:d
+				if (values[0].StartsWith("[") && values[values.Length - 2].EndsWith("]")) {
+					string ipaddressstring = string.Join(":", values.Take(values.Length - 1).ToArray());
+					ipaddy = IPAddress.Parse(ipaddressstring);
+					port = GetPort(values[values.Length - 1]);
+				} else { //[a:b:c] or a:b:c
+					ipaddy = IPAddress.Parse(endpoint);
+					port = defaultport;
+				}
+			} else {
+				throw new FormatException(string.Format("Invalid endpoint ipaddress '{0}'", endpoint));
+			}
+
+			if (port == -1) {
+				throw new ArgumentException(string.Format("No port specified: '{0}'", endpoint));
+			}
+
+			return new IPEndPoint(ipaddy, port);
+		}
+
+		static int GetPort(string p)
+		{
+			if (!int.TryParse(p, out var port) || port < IPEndPoint.MinPort || port > IPEndPoint.MaxPort) {
+				throw new FormatException(string.Format("Invalid end point port '{0}'", p));
+			}
+
+			return port;
+		}
+
+		static IPAddress GetIPfromHost(string p)
+		{
+			var hosts = Dns.GetHostAddresses(p);
+
+			if (hosts == null || hosts.Length == 0) {
+				throw new ArgumentException(string.Format("Host not found: {0}", p));
+			}
+
+			return hosts[0];
+		}
+
     }
 }
