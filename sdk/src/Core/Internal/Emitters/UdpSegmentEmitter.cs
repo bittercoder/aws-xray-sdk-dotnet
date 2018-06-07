@@ -38,7 +38,7 @@ namespace Amazon.XRay.Recorder.Core.Internal.Emitters
 
         private static readonly Logger _logger = Logger.GetLogger(typeof(UdpSegmentEmitter));
         private readonly int _defaultDaemonPort = 2000;
-        private readonly IPAddress _defaultDaemonAddress = IPAddress.Loopback;
+	    private readonly HostEndpoint _endpoint;
         private readonly ISegmentMarshaller _marshaller;
         private readonly UdpClient _udpClient;
 
@@ -54,7 +54,7 @@ namespace Amazon.XRay.Recorder.Core.Internal.Emitters
         private UdpSegmentEmitter(ISegmentMarshaller marshaller)
         {
             _marshaller = marshaller;
-            _udpClient = new UdpClient();
+	        _udpClient = new UdpClient();
 
             SetEndPointOrDefault(Environment.GetEnvironmentVariable(EnvironmentVariableDaemonAddress));
         }
@@ -74,7 +74,7 @@ namespace Amazon.XRay.Recorder.Core.Internal.Emitters
             {
                 var packet = _marshaller.Marshall(segment);
                 var data = Encoding.ASCII.GetBytes(packet);
-                _udpClient.Send(data, data.Length, EndPoint);
+                _udpClient.Send(data, data.Length, _endpoint.Host, _endpoint.Port);
             }
             catch (SocketException e)
             {
@@ -147,9 +147,27 @@ namespace Amazon.XRay.Recorder.Core.Internal.Emitters
             }
         }
 
-        private void SetEndPointOrDefault(string daemonAddress)
+	    public bool TryParse(string entry, out HostEndpoint hostEndpoint)
+	    {
+		    var entries = entry.Split(':');
+		    if (entries.Length != 2)
+		    {
+			    hostEndpoint = null;
+			    return false;
+		    }
+		    if (!int.TryParse(entries[1], out var port))
+		    {
+			    hostEndpoint = null;
+			    return false;
+		    }
+		    hostEndpoint = new HostEndpoint(entries[0], port);
+		    return true;
+	    }
+
+		private void SetEndPointOrDefault(string daemonAddress)
         {
-            IPEndPoint daemonEndPoint;
+			TryParse(daemonAddress, out HostEndpoint.)
+			IPEndPoint daemonEndPoint;
 
             if (string.IsNullOrEmpty(daemonAddress))
             {
